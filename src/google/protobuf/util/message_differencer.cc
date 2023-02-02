@@ -368,6 +368,10 @@ void MessageDifferencer::set_scope(Scope scope) { scope_ = scope; }
 
 MessageDifferencer::Scope MessageDifferencer::scope() const { return scope_; }
 
+void MessageDifferencer::set_force_compare_no_presence(bool value) {
+  force_compare_no_presence_ = value;
+}
+
 void MessageDifferencer::set_float_comparison(FloatComparison comparison) {
   default_field_comparator_.set_float_comparison(
       comparison == EXACT ? DefaultFieldComparator::EXACT
@@ -701,8 +705,23 @@ bool MessageDifferencer::CompareRequestedFieldsUsingSettings(
     const FieldDescriptorArray& message1_fields,
     const FieldDescriptorArray& message2_fields,
     std::vector<SpecificField>* parent_fields) {
+  LOG(INFO)
+      << ">>> Enter CompareRequestedFieldsUsingSettings with message1 fields:";
+  for (const auto& field : message1_fields) {
+    LOG(INFO) << ">>>>> " << (field ? field->full_name() : "NULL");
+  }
+  LOG(INFO)
+      << ">>> Enter CompareRequestedFieldsUsingSettings with message2 fields:";
+  for (const auto& field : message2_fields) {
+    LOG(INFO) << ">>>>> " << (field ? field->full_name() : "NULL");
+  }
+  LOG(INFO) << ">>> message1: " << message1.DebugString();
+  LOG(INFO) << ">>> message2: " << message2.DebugString();
+
   if (scope_ == FULL) {
+    LOG(INFO) << ">>> 1";
     if (message_field_comparison_ == EQUIVALENT) {
+      LOG(INFO) << ">>> 2";
       // We need to merge the field lists of both messages (i.e.
       // we are merely checking for a difference in field values,
       // rather than the addition or deletion of fields).
@@ -712,13 +731,16 @@ bool MessageDifferencer::CompareRequestedFieldsUsingSettings(
                                        fields_union, fields_union,
                                        parent_fields);
     } else {
+      LOG(INFO) << ">>> 3";
       // Simple equality comparison, use the unaltered field lists.
       return CompareWithFieldsInternal(message1, message2, unpacked_any,
                                        message1_fields, message2_fields,
                                        parent_fields);
     }
   } else {
+    LOG(INFO) << ">>> 4";
     if (message_field_comparison_ == EQUIVALENT) {
+      LOG(INFO) << ">>> 5";
       // We use the list of fields for message1 for both messages when
       // comparing.  This way, extra fields in message2 are ignored,
       // and missing fields in message2 use their default value.
@@ -726,6 +748,7 @@ bool MessageDifferencer::CompareRequestedFieldsUsingSettings(
                                        message1_fields, message1_fields,
                                        parent_fields);
     } else {
+      LOG(INFO) << ">>> 6";
       // We need to consider the full list of fields for message1
       // but only the intersection for message2.  This way, any fields
       // only present in message2 will be ignored, but any fields only
@@ -742,6 +765,7 @@ bool MessageDifferencer::CompareRequestedFieldsUsingSettings(
 FieldDescriptorArray MessageDifferencer::CombineFields(
     const FieldDescriptorArray& fields1, Scope fields1_scope,
     const FieldDescriptorArray& fields2, Scope fields2_scope) {
+  LOG(INFO) << ">>>> Enter CombineFields ";
   size_t index1 = 0;
   size_t index2 = 0;
 
@@ -751,17 +775,31 @@ FieldDescriptorArray MessageDifferencer::CombineFields(
     const FieldDescriptor* field1 = fields1[index1];
     const FieldDescriptor* field2 = fields2[index2];
 
+    LOG(INFO) << ">>>> CombineFields in loop with field1: "
+              << (field1 ? field1->full_name() : "NULL") << " and field2; "
+              << (field2 ? field2->full_name() : "NULL");
+
     if (FieldBefore(field1, field2)) {
+      LOG(INFO) << ">>>> FieldBefore(field1, field2)";
       if (fields1_scope == FULL) {
         tmp_message_fields_.push_back(fields1[index1]);
       }
       ++index1;
     } else if (FieldBefore(field2, field1)) {
+      LOG(INFO) << ">>>> FieldBefore(field2, field1)";
       if (fields2_scope == FULL) {
+        tmp_message_fields_.push_back(fields2[index2]);
+      } else if (fields2_scope == PARTIAL && force_compare_no_presence_ &&
+                 !field2->has_presence() && !field2->is_repeated()) {
+        // if special bit is set and field1 is not the default, force comparing
+        // to field2.
+        LOG(INFO) << ">>> forcing compare of " << field2->full_name();
+        force_compare_no_presence_fields_.insert(fields2[index2]);
         tmp_message_fields_.push_back(fields2[index2]);
       }
       ++index2;
     } else {
+      LOG(INFO) << ">>>> else";
       tmp_message_fields_.push_back(fields1[index1]);
       ++index1;
       ++index2;
@@ -773,6 +811,11 @@ FieldDescriptorArray MessageDifferencer::CombineFields(
   FieldDescriptorArray combined_fields(tmp_message_fields_.begin(),
                                        tmp_message_fields_.end());
 
+  LOG(INFO) << ">>>> returning combined fields: ";
+  for (const auto& field : combined_fields) {
+    LOG(INFO) << ">>>>> " << (field ? field->full_name() : "NULL");
+  }
+
   return combined_fields;
 }
 
@@ -781,6 +824,16 @@ bool MessageDifferencer::CompareWithFieldsInternal(
     const FieldDescriptorArray& message1_fields,
     const FieldDescriptorArray& message2_fields,
     std::vector<SpecificField>* parent_fields) {
+  LOG(INFO) << ">>>>> Enter CompareWithFieldsInternal";
+  LOG(INFO) << ">>>> message1_fields: ";
+  for (const auto& field : message1_fields) {
+    LOG(INFO) << ">>>>> " << (field ? field->full_name() : "NULL");
+  }
+  LOG(INFO) << ">>>> message2_fields: ";
+  for (const auto& field : message2_fields) {
+    LOG(INFO) << ">>>>> " << (field ? field->full_name() : "NULL");
+  }
+
   bool isDifferent = false;
   int field_index1 = 0;
   int field_index2 = 0;
@@ -792,10 +845,15 @@ bool MessageDifferencer::CompareWithFieldsInternal(
     const FieldDescriptor* field1 = message1_fields[field_index1];
     const FieldDescriptor* field2 = message2_fields[field_index2];
 
+    LOG(INFO) << ">>> In while loop";
     // Once we have reached sentinel values, we are done the comparison.
     if (field1 == NULL && field2 == NULL) {
       break;
     }
+
+    LOG(INFO) << ">>> In while loop for field1: "
+              << (field1 ? field1->full_name() : "NULL")
+              << " and field2: " << (field2 ? field2->full_name() : "NULL");
 
     // Check for differences in the field itself.
     if (FieldBefore(field1, field2)) {
@@ -836,7 +894,9 @@ bool MessageDifferencer::CompareWithFieldsInternal(
           } else {
             specific_field.index = -1;
           }
-
+          specific_field.forced_compare_no_presence_ =
+              force_compare_no_presence_ &&
+              force_compare_no_presence_fields_.contains(field1);
           parent_fields->push_back(specific_field);
           reporter_->ReportDeleted(message1, message2, *parent_fields);
           parent_fields->pop_back();
@@ -888,6 +948,9 @@ bool MessageDifferencer::CompareWithFieldsInternal(
             specific_field.index = -1;
             specific_field.new_index = -1;
           }
+          specific_field.forced_compare_no_presence_ =
+              force_compare_no_presence_ &&
+              force_compare_no_presence_fields_.contains(field1);
 
           parent_fields->push_back(specific_field);
           reporter_->ReportAdded(message1, message2, *parent_fields);
@@ -944,6 +1007,10 @@ bool MessageDifferencer::CompareWithFieldsInternal(
         specific_field.unpacked_any = unpacked_any;
         specific_field.field = field1;
         parent_fields->push_back(specific_field);
+        specific_field.forced_compare_no_presence_ =
+            force_compare_no_presence_ &&
+            force_compare_no_presence_fields_.contains(field1);
+
         if (fieldDifferent) {
           reporter_->ReportModified(message1, message2, *parent_fields);
           isDifferent = true;
@@ -1494,6 +1561,7 @@ bool MessageDifferencer::UnpackAnyField::UnpackAny(
       any.GetDescriptor()->file()->pool()->FindMessageTypeByName(
           full_type_name);
   if (desc == NULL) {
+    ABSL_VLOG(1) << "Proto type '" << full_type_name << "' not found";
     return false;
   }
 
