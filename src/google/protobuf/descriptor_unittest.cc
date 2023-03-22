@@ -51,6 +51,8 @@
 #include "google/protobuf/descriptor_legacy.h"
 #include "google/protobuf/unittest.pb.h"
 #include "google/protobuf/unittest_custom_options.pb.h"
+#include "google/protobuf/unittest_features.pb.h"
+#include "google/protobuf/unittest_invalid_features.pb.h"
 #include "google/protobuf/stubs/common.h"
 #include "google/protobuf/descriptor.pb.h"
 #include "google/protobuf/descriptor.h"
@@ -486,6 +488,20 @@ TEST_F(FileDescriptorTest, Syntax) {
     file->CopyTo(&other);
     EXPECT_EQ("proto3", other.syntax());
   }
+  {
+    proto.set_syntax("editions");
+    proto.set_edition("very-cool");
+    DescriptorPool pool;
+    const FileDescriptor* file = pool.BuildFile(proto);
+    EXPECT_TRUE(file != nullptr);
+    EXPECT_EQ(FileDescriptorLegacy::Syntax::SYNTAX_EDITIONS,
+              FileDescriptorLegacy(file).syntax());
+    EXPECT_EQ("very-cool", file->edition());
+    FileDescriptorProto other;
+    file->CopyTo(&other);
+    EXPECT_EQ("editions", other.syntax());
+    EXPECT_EQ("very-cool", other.edition());
+  }
 }
 
 TEST_F(FileDescriptorTest, CopyHeadingTo) {
@@ -509,6 +525,23 @@ TEST_F(FileDescriptorTest, CopyHeadingTo) {
   EXPECT_EQ(other.syntax(), "proto3");
   EXPECT_EQ(other.options().java_package(), "foo.bar.baz");
   EXPECT_TRUE(other.message_type().empty());
+  {
+    proto.set_syntax("editions");
+    proto.set_edition("very-cool");
+
+    DescriptorPool pool;
+    const FileDescriptor* file = pool.BuildFile(proto);
+    ASSERT_NE(file, nullptr);
+
+    FileDescriptorProto other;
+    file->CopyHeadingTo(&other);
+    EXPECT_EQ(other.name(), "foo.proto");
+    EXPECT_EQ(other.package(), "foo.bar.baz");
+    EXPECT_EQ(other.syntax(), "editions");
+    EXPECT_EQ(other.edition(), "very-cool");
+    EXPECT_EQ(other.options().java_package(), "foo.bar.baz");
+    EXPECT_TRUE(other.message_type().empty());
+  }
 }
 
 void ExtractDebugString(
@@ -7034,6 +7067,7 @@ TEST_F(ValidationErrorTest, UnusedImportWithOtherError) {
       // Should not also contain unused import error.
       "foo.proto: Foo.foo: EXTENDEE: \"Baz\" is not defined.\n");
 }
+
 
 
 

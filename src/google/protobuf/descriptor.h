@@ -118,6 +118,7 @@ class ServiceOptions;
 class MethodOptions;
 class FileOptions;
 class UninterpretedOption;
+class Features;
 class SourceCodeInfo;
 
 // Defined in message.h
@@ -1656,6 +1657,7 @@ class PROTOBUF_EXPORT FileDescriptor : private internal::SymbolBase {
   // other definitions.  Allowed options are defined by FileOptions in
   // descriptor.proto, and any available extensions of that message.
   const FileOptions& options() const;
+
 
  private:
   // With the upcoming release of editions, syntax should not be used for
