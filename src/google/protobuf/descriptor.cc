@@ -7248,12 +7248,22 @@ void DescriptorBuilder::ValidateEnumOptions(EnumDescriptor* enm,
           used_values.emplace(enum_value->number(), enum_value->full_name());
       bool inserted = insert_result.second;
       if (!inserted) {
-        std::string error = absl::StrCat(
-            "\"", enum_value->full_name(), "\" uses the same enum value as \"",
-            insert_result.first->second,
-            "\". If this is intended, set "
-            "'option allow_alias = true;' to the enum definition.");
         if (!enm->options().allow_alias()) {
+          // Find the next free number.
+          absl::flat_hash_set<int> used;
+          for (int j = 0; j < enm->value_count(); ++j) {
+            used.insert(enm->value(j)->number());
+          }
+          int next_value = enum_value->number() + 1;
+          while (used.contains(next_value)) ++next_value;
+
+          std::string error = absl::StrCat(
+              "\"", enum_value->full_name(),
+              "\" uses the same enum value as \"", insert_result.first->second,
+              "\". If this is intended, set "
+              "'option allow_alias = true;' to the enum definition. "
+              "The next free enum value is ",
+              next_value, ".");
           // Generate error if duplicated enum values are explicitly disallowed.
           AddError(enm->full_name(), proto.value(i),
                    DescriptorPool::ErrorCollector::NUMBER, error);

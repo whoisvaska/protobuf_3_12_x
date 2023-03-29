@@ -6087,7 +6087,21 @@ TEST_F(ValidationErrorTest, DisallowEnumAlias) {
       "foo.proto: Bar: NUMBER: "
       "\"ENUM_B\" uses the same enum value as \"ENUM_A\". "
       "If this is intended, set 'option allow_alias = true;' to the enum "
-      "definition.\n");
+      "definition. The next free enum value is 1.\n");
+
+  BuildFileWithErrors(
+      "name: \"foo.proto\" "
+      "enum_type {"
+      "  name: \"Bar\""
+      "  value { name:\"ENUM_A\" number:10 }"
+      "  value { name:\"ENUM_B\" number:10 }"
+      "  value { name:\"ENUM_C\" number:11 }"
+      "  value { name:\"ENUM_D\" number:20 }"
+      "}",
+      "foo.proto: Bar: NUMBER: "
+      "\"ENUM_B\" uses the same enum value as \"ENUM_A\". "
+      "If this is intended, set 'option allow_alias = true;' to the enum "
+      "definition. The next free enum value is 12.\n");
 }
 
 TEST_F(ValidationErrorTest, AllowEnumAlias) {
