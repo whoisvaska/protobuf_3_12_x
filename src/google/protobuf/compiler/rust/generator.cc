@@ -39,6 +39,7 @@
 #include "absl/strings/str_replace.h"
 #include "absl/strings/string_view.h"
 #include "absl/types/optional.h"
+#include "google/protobuf/compiler/cpp/names.h"
 #include "google/protobuf/descriptor.h"
 #include "google/protobuf/io/printer.h"
 
@@ -156,20 +157,76 @@ void GenerateForUpb(const FileDescriptor* file, google::protobuf::io::Printer& p
   }
 }
 
+std::string GetUnderscoreDelimitedFullName(const Descriptor* msg) {
+  std::string result = msg->full_name();
+  absl::StrReplaceAll({{".", "_"}}, &result);
+  return result;
+}
+
 void GenerateForCpp(const FileDescriptor* file, google::protobuf::io::Printer& p) {
   for (int i = 0; i < file->message_type_count(); ++i) {
-    // TODO(b/272728844): Implement real logic
-    p.Emit({{"Msg", file->message_type(i)->name()}},
-           R"rs(
-      pub struct $Msg$ {
-        msg: ::__std::ptr::NonNull<u8>,
-      }
+    const Descriptor* msg = file->message_type(i);
+    p.Emit(
+        {
+            {"Msg", msg->name()},
+            {"pkg_Msg", GetUnderscoreDelimitedFullName(msg)},
+        },
+        R"rs(
+          pub struct $Msg$ {
+            msg: ::__std::ptr::NonNull<u8>,
+          }
 
-      impl $Msg$ {
-        pub fn new() -> Self { Self { msg: ::__std::ptr::NonNull::dangling() }}
-        pub fn serialize(&self) -> Vec<u8> { vec![] }
-      }
-    )rs");
+          impl $Msg$ {
+            pub fn new() -> Self {
+              Self {
+                msg: unsafe { __rust_proto_thunk__$pkg_Msg$__new() }
+              }
+            }
+            pub fn serialize(&self) -> ::__pb::SerializedData {
+              return unsafe { __rust_proto_thunk__$pkg_Msg$__serialize(self.msg) };
+            }
+            pub fn __unstable_cpp_repr_grant_permission_to_break(&mut self) -> ::__std::ptr::NonNull<u8> {
+              self.msg
+            }
+            pub fn parse(&mut self, data: ::__pb::SerializedData) -> bool {
+              unsafe { __rust_proto_thunk__$pkg_Msg$__parse(self.msg, data) }
+            }
+          }
+
+          extern "C" {
+            fn __rust_proto_thunk__$pkg_Msg$__new() -> ::__std::ptr::NonNull<u8>;
+            fn __rust_proto_thunk__$pkg_Msg$__serialize(raw_msg: ::__std::ptr::NonNull<u8>) -> ::__pb::SerializedData;
+            fn __rust_proto_thunk__$pkg_Msg$__parse(raw_msg: ::__std::ptr::NonNull<u8>, data: ::__pb::SerializedData) -> bool;
+          }
+        )rs");
+  }
+}
+
+void GenerateThunksForCpp(const FileDescriptor* file, google::protobuf::io::Printer& p) {
+  for (int i = 0; i < file->message_type_count(); ++i) {
+    const Descriptor* msg = file->message_type(i);
+    p.Emit(
+        {
+            {"Msg", msg->name()},
+            {"pkg_Msg", GetUnderscoreDelimitedFullName(msg)},
+            {"namespace", cpp::Namespace(msg)},
+        },
+        R"cc(
+          extern "C" {
+          void* __rust_proto_thunk__$pkg_Msg$__new() { return new $namespace$::$Msg$(); }
+
+          google::protobuf::rust_internal::SerializedData
+          __rust_proto_thunk__$pkg_Msg$__serialize($namespace$::$Msg$* msg) {
+            return google::protobuf::rust_internal::SerializeMsg(msg);
+          }
+
+          bool __rust_proto_thunk__$pkg_Msg$__parse(
+              $namespace$::$Msg$* msg,
+              google::protobuf::rust_internal::SerializedData data) {
+            return msg->ParseFromArray(data.data, data.len);
+          }
+          }
+        )cc");
   }
 }
 
@@ -240,6 +297,16 @@ bool RustGenerator::Generate(const FileDescriptor* file,
       break;
     case Kernel::kCpp:
       GenerateForCpp(file, p);
+
+      auto thunksfile = absl::WrapUnique(
+          generator_context->Open(absl::StrCat(basename, ".pb.thunks.cc")));
+      google::protobuf::io::Printer thunks(thunksfile.get());
+      thunks.Emit({{"basename", basename}},
+                  R"cc(
+#include "$basename$.pb.h"
+#include "google/protobuf/rust/cpp_kernel/cpp_api.h"
+                  )cc");
+      GenerateThunksForCpp(file, thunks);
       break;
   }
   return true;
