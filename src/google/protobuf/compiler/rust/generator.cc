@@ -30,6 +30,7 @@
 
 #include "google/protobuf/compiler/rust/generator.h"
 
+#include <optional>
 #include <string>
 #include <utility>
 #include <vector>
@@ -38,7 +39,10 @@
 #include "absl/strings/str_cat.h"
 #include "absl/strings/str_replace.h"
 #include "absl/strings/string_view.h"
+#include "absl/strings/substitute.h"
 #include "absl/types/optional.h"
+#include "google/protobuf/compiler/cpp/helpers.h"
+#include "google/protobuf/compiler/cpp/names.h"
 #include "google/protobuf/descriptor.h"
 #include "google/protobuf/io/printer.h"
 
@@ -156,20 +160,239 @@ void GenerateForUpb(const FileDescriptor* file, google::protobuf::io::Printer& p
   }
 }
 
+std::string GetUnderscoreDelimitedFullName(const Descriptor* msg) {
+  std::string result = msg->full_name();
+  absl::StrReplaceAll({{".", "_"}}, &result);
+  return result;
+}
+
+std::string GetAccessorThunkName(
+    const FieldDescriptor* field, absl::string_view op,
+    absl::string_view underscore_delimited_full_name) {
+  return absl::Substitute("__rust_proto_thunk__$0_$1_$2",
+                          underscore_delimited_full_name, op, field->name());
+}
+
+bool IsSupportedFieldType(const FieldDescriptor* field) {
+  return !field->is_repeated() &&
+         (field->cpp_type() == FieldDescriptor::CPPTYPE_BOOL ||
+          field->cpp_type() == FieldDescriptor::CPPTYPE_INT64);
+}
+
+std::string PrimitiveRsTypeName(const FieldDescriptor* field) {
+  switch (field->cpp_type()) {
+    case FieldDescriptor::CPPTYPE_INT64:
+      return "i64";
+    case FieldDescriptor::CPPTYPE_BOOL:
+      return "bool";
+    default:
+      break;
+  }
+  ABSL_LOG(FATAL) << "Unsupported field type: " << field->type_name();
+  return "";
+}
+
+void GenerateAccessorFns(const Descriptor* msg, google::protobuf::io::Printer& p,
+                         absl::string_view underscore_delimited_full_name) {
+  for (int i = 0; i < msg->field_count(); ++i) {
+    const FieldDescriptor* field = msg->field(i);
+    if (!IsSupportedFieldType(field)) {
+      continue;
+    }
+    p.Emit(
+        {
+            {"field_name", field->name()},
+            {"FieldType", PrimitiveRsTypeName(field)},
+            {"hazzer_thunk_name",
+             GetAccessorThunkName(field, "has",
+                                  underscore_delimited_full_name)},
+            {"getter_thunk_name",
+             GetAccessorThunkName(field, "", underscore_delimited_full_name)},
+            {"setter_thunk_name",
+             GetAccessorThunkName(field, "set",
+                                  underscore_delimited_full_name)},
+            {"clearer_thunk_name",
+             GetAccessorThunkName(field, "clear",
+                                  underscore_delimited_full_name)},
+        },
+        R"rs(
+             pub fn has_$field_name$(&self) -> bool {
+               unsafe { $hazzer_thunk_name$(self.msg) }
+             }
+             pub fn $field_name$(&self) -> $FieldType$ {
+               unsafe { $getter_thunk_name$(self.msg) }
+             }
+             pub fn set_$field_name$(&mut self, val: $FieldType$) {
+               unsafe { $setter_thunk_name$(self.msg, val) };
+             }
+             pub fn clear_$field_name$(&mut self) {
+               unsafe { $clearer_thunk_name$(self.msg) };
+             }
+           )rs");
+  }
+}
+
+void GenerateAccessorThunkRsDeclarations(
+    const Descriptor* msg, google::protobuf::io::Printer& p,
+    std::string underscore_delimited_full_name) {
+  for (int i = 0; i < msg->field_count(); ++i) {
+    const FieldDescriptor* field = msg->field(i);
+    if (!IsSupportedFieldType(field)) {
+      continue;
+    }
+    p.Emit(
+        {
+            {"FieldType", PrimitiveRsTypeName(field)},
+            {"hazzer_thunk_name",
+             GetAccessorThunkName(field, "has",
+                                  underscore_delimited_full_name)},
+            {"getter_thunk_name",
+             GetAccessorThunkName(field, "", underscore_delimited_full_name)},
+            {"setter_thunk_name",
+             GetAccessorThunkName(field, "set",
+                                  underscore_delimited_full_name)},
+            {"clearer_thunk_name",
+             GetAccessorThunkName(field, "clear",
+                                  underscore_delimited_full_name)},
+        },
+        R"rs(
+            fn $hazzer_thunk_name$(raw_msg: ::__std::ptr::NonNull<u8>) -> bool;
+             fn $getter_thunk_name$(raw_msg: ::__std::ptr::NonNull<u8>) -> $FieldType$;
+             fn $setter_thunk_name$(raw_msg: ::__std::ptr::NonNull<u8>, val: $FieldType$);
+             fn $clearer_thunk_name$(raw_msg: ::__std::ptr::NonNull<u8>);
+           )rs");
+  }
+}
+
+void GenerateAccessorThunksCcDefinitions(
+    const Descriptor* msg, google::protobuf::io::Printer& p,
+    absl::string_view underscore_delimited_full_name) {
+  for (int i = 0; i < msg->field_count(); ++i) {
+    const FieldDescriptor* field = msg->field(i);
+    if (!IsSupportedFieldType(field)) {
+      continue;
+    }
+    p.Emit(
+        {{"field_name", field->name()},
+         {"FieldType", cpp::PrimitiveTypeName(field->cpp_type())},
+         {"namespace", cpp::Namespace(msg)},
+         {"hazzer_thunk_name",
+          GetAccessorThunkName(field, "has", underscore_delimited_full_name)},
+         {"getter_thunk_name",
+          GetAccessorThunkName(field, "", underscore_delimited_full_name)},
+         {"setter_thunk_name",
+          GetAccessorThunkName(field, "set", underscore_delimited_full_name)},
+         {"clearer_thunk_name",
+          GetAccessorThunkName(field, "clear",
+                               underscore_delimited_full_name)}},
+        R"cc(
+          extern "C" {
+          bool $hazzer_thunk_name$($namespace$::$Msg$* msg) {
+            return msg->has_$field_name$();
+          }
+          $FieldType$ $getter_thunk_name$($namespace$::$Msg$* msg) {
+            return msg->$field_name$();
+          }
+          void $setter_thunk_name$($namespace$::$Msg$* msg, $FieldType$ val) {
+            msg->set_$field_name$(val);
+          }
+          void $clearer_thunk_name$($namespace$::$Msg$* msg) {
+            msg->clear_$field_name$();
+          }
+          }
+        )cc");
+  }
+}
+
 void GenerateForCpp(const FileDescriptor* file, google::protobuf::io::Printer& p) {
   for (int i = 0; i < file->message_type_count(); ++i) {
-    // TODO(b/272728844): Implement real logic
-    p.Emit({{"Msg", file->message_type(i)->name()}},
-           R"rs(
-      pub struct $Msg$ {
-        msg: ::__std::ptr::NonNull<u8>,
-      }
+    const Descriptor* msg = file->message_type(i);
+    std::string underscore_delimited_full_name =
+        GetUnderscoreDelimitedFullName(msg);
+    p.Emit(
+        {
+            {"Msg", msg->name()},
+            {"pkg_Msg", underscore_delimited_full_name},
+            {"accessor_fns",
+             [&] {
+               GenerateAccessorFns(file->message_type(i), p,
+                                   underscore_delimited_full_name);
+             }},
+            {"accessor_thunks",
+             [&] {
+               GenerateAccessorThunkRsDeclarations(
+                   file->message_type(i), p, underscore_delimited_full_name);
+             }},
+        },
+        R"rs(
+          #[allow(non_camel_case_types)]
+          pub struct $Msg$ {
+            msg: ::__std::ptr::NonNull<u8>,
+          }
 
-      impl $Msg$ {
-        pub fn new() -> Self { Self { msg: ::__std::ptr::NonNull::dangling() }}
-        pub fn serialize(&self) -> Vec<u8> { vec![] }
-      }
-    )rs");
+          impl $Msg$ {
+            pub fn new() -> Self {
+              Self {
+                msg: unsafe { __rust_proto_thunk__$pkg_Msg$__new() }
+              }
+            }
+            pub fn serialize(&self) -> ::__pb::SerializedData {
+              return unsafe { __rust_proto_thunk__$pkg_Msg$__serialize(self.msg) };
+            }
+            pub fn __unstable_cpp_repr_grant_permission_to_break(&mut self) -> ::__std::ptr::NonNull<u8> {
+              self.msg
+            }
+            pub fn parse(&mut self, data: ::__pb::SerializedData) -> bool {
+              unsafe { __rust_proto_thunk__$pkg_Msg$__parse(self.msg, data) }
+            }
+            $accessor_fns$
+          }
+
+          extern "C" {
+            fn __rust_proto_thunk__$pkg_Msg$__new() -> ::__std::ptr::NonNull<u8>;
+            fn __rust_proto_thunk__$pkg_Msg$__serialize(raw_msg: ::__std::ptr::NonNull<u8>) -> ::__pb::SerializedData;
+            fn __rust_proto_thunk__$pkg_Msg$__parse(raw_msg: ::__std::ptr::NonNull<u8>, data: ::__pb::SerializedData) -> bool;
+
+            $accessor_thunks$
+          }
+        )rs");
+  }
+}
+
+void GenerateThunksForCpp(const FileDescriptor* file, google::protobuf::io::Printer& p) {
+  for (int i = 0; i < file->message_type_count(); ++i) {
+    const Descriptor* msg = file->message_type(i);
+    std::string underscore_delimited_full_name =
+        GetUnderscoreDelimitedFullName(msg);
+    p.Emit(
+        {
+            {"Msg", msg->name()},
+            {"pkg_Msg", GetUnderscoreDelimitedFullName(msg)},
+            {"namespace", cpp::Namespace(msg)},
+            {"accessor_thunks",
+             [&] {
+               GenerateAccessorThunksCcDefinitions(
+                   file->message_type(i), p, underscore_delimited_full_name);
+             }},
+        },
+        R"cc(
+          extern "C" {
+          void* __rust_proto_thunk__$pkg_Msg$__new() { return new $namespace$::$Msg$(); }
+
+          google::protobuf::rust_internal::SerializedData
+          __rust_proto_thunk__$pkg_Msg$__serialize($namespace$::$Msg$* msg) {
+            return google::protobuf::rust_internal::SerializeMsg(msg);
+          }
+
+          bool __rust_proto_thunk__$pkg_Msg$__parse(
+              $namespace$::$Msg$* msg,
+              google::protobuf::rust_internal::SerializedData data) {
+            return msg->ParseFromArray(data.data, data.len);
+          }
+
+          $accessor_thunks$
+          }
+        )cc");
   }
 }
 
@@ -240,6 +463,16 @@ bool RustGenerator::Generate(const FileDescriptor* file,
       break;
     case Kernel::kCpp:
       GenerateForCpp(file, p);
+
+      auto thunksfile = absl::WrapUnique(
+          generator_context->Open(absl::StrCat(basename, ".pb.thunks.cc")));
+      google::protobuf::io::Printer thunks(thunksfile.get());
+      thunks.Emit({{"basename", basename}},
+                  R"cc(
+#include "$basename$.pb.h"
+#include "google/protobuf/rust/cpp_kernel/cpp_api.h"
+                  )cc");
+      GenerateThunksForCpp(file, thunks);
       break;
   }
   return true;
