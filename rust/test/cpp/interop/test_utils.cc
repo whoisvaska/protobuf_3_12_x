@@ -28,24 +28,22 @@
 // (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-//! Kernel-agnostic logic for the Rust Protobuf Runtime.
-//!
-//! For kernel-specific logic this crate delegates to the respective __runtime
-//! crate.
+#include <iostream>
 
-#[cfg(cpp_kernel)]
-pub extern crate cpp as __runtime;
-#[cfg(upb_kernel)]
-pub extern crate upb as __runtime;
+#include "google/protobuf/rust/cpp_kernel/cpp_api.h"
+#include "google/protobuf/unittest.pb.h"
 
-pub use __runtime::Arena;
-pub use __runtime::SerializedData;
+extern "C" void MutateInt64Field(protobuf_unittest::TestAllTypes* msg) {
+  msg->set_optional_int64(42);
+}
 
-/// Represents a borrowed slice of bytes. User-invisible type, only used in FFI
-/// between C++ and Rust.
-#[repr(C)]
-pub struct PtrAndLen {
-    /// Borrows the memory.
-    pub ptr: *const u8,
-    pub len: usize,
+extern "C" google::protobuf::rust_internal::SerializedData Serialize(
+    const protobuf_unittest::TestAllTypes* msg) {
+  return google::protobuf::rust_internal::SerializeMsg(msg);
+}
+
+extern "C" google::protobuf::rust_internal::SerializedData SerializeMutatedInstance() {
+  protobuf_unittest::TestAllTypes* inst = new protobuf_unittest::TestAllTypes();
+  MutateInt64Field(inst);
+  return Serialize(inst);
 }

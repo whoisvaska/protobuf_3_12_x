@@ -28,24 +28,10 @@
 // (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-//! Kernel-agnostic logic for the Rust Protobuf Runtime.
-//!
-//! For kernel-specific logic this crate delegates to the respective __runtime
-//! crate.
+use std::alloc::{alloc, Layout};
 
-#[cfg(cpp_kernel)]
-pub extern crate cpp as __runtime;
-#[cfg(upb_kernel)]
-pub extern crate upb as __runtime;
-
-pub use __runtime::Arena;
-pub use __runtime::SerializedData;
-
-/// Represents a borrowed slice of bytes. User-invisible type, only used in FFI
-/// between C++ and Rust.
-#[repr(C)]
-pub struct PtrAndLen {
-    /// Borrows the memory.
-    pub ptr: *const u8,
-    pub len: usize,
+#[no_mangle]
+extern "C" fn __pb_rust_alloc(size: usize, align: usize) -> *mut u8 {
+    let layout = Layout::from_size_align(size, align).unwrap();
+    unsafe { alloc(layout) }
 }

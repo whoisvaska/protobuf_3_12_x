@@ -28,24 +28,48 @@
 // (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-//! Kernel-agnostic logic for the Rust Protobuf Runtime.
-//!
-//! For kernel-specific logic this crate delegates to the respective __runtime
-//! crate.
+use std::ptr::NonNull;
 
-#[cfg(cpp_kernel)]
-pub extern crate cpp as __runtime;
-#[cfg(upb_kernel)]
-pub extern crate upb as __runtime;
+macro_rules! assert_serializes_equally {
+    ($msg:ident) => {{
+        let mut msg = $msg;
+        let serialized_cpp =
+            unsafe { Serialize(msg.__unstable_cpp_repr_grant_permission_to_break()) };
+        let serialized_rs = msg.serialize();
 
-pub use __runtime::Arena;
-pub use __runtime::SerializedData;
+        assert_eq!(*serialized_rs, *serialized_cpp);
+    }};
+}
 
-/// Represents a borrowed slice of bytes. User-invisible type, only used in FFI
-/// between C++ and Rust.
-#[repr(C)]
-pub struct PtrAndLen {
-    /// Borrows the memory.
-    pub ptr: *const u8,
-    pub len: usize,
+#[test]
+fn mutate_message_in_cpp() {
+    let mut msg = unittest_proto::TestAllTypes::new();
+    unsafe { MutateInt64Field(msg.__unstable_cpp_repr_grant_permission_to_break()) };
+    assert_serializes_equally!(msg);
+}
+
+#[test]
+fn mutate_message_in_rust() {
+    let mut msg = unittest_proto::TestAllTypes::new();
+    msg.set_optional_int64(43);
+    assert_serializes_equally!(msg);
+}
+
+#[test]
+fn parse_message_in_rust() {
+    let serialized = unsafe { SerializeMutatedInstance() };
+    let mut msg = unittest_proto::TestAllTypes::new();
+    assert_eq!(msg.optional_int64(), 0);
+
+    msg.parse(serialized);
+    assert_eq!(msg.optional_int64(), 42);
+    assert_serializes_equally!(msg);
+}
+
+// Helper functions invoking C++ Protobuf APIs directly in C++. Defined in
+// `//third_party/protobuf/rust/test/cpp/interop:test_utils`.
+extern "C" {
+    fn SerializeMutatedInstance() -> protobuf_cpp::SerializedData;
+    fn MutateInt64Field(msg: NonNull<u8>);
+    fn Serialize(msg: NonNull<u8>) -> protobuf_cpp::SerializedData;
 }
