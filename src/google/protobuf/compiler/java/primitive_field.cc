@@ -55,6 +55,7 @@ namespace java {
 using internal::WireFormat;
 
 namespace {
+using Semantic = ::google::protobuf::io::AnnotationCollector::Semantic;
 
 void SetPrimitiveVariables(
     const FieldDescriptor* descriptor, int messageBitIndex, int builderBitIndex,
@@ -288,7 +289,7 @@ void ImmutablePrimitiveFieldGenerator::GenerateBuilderMembers(
                  "  $on_changed$\n"
                  "  return this;\n"
                  "}\n");
-  printer->Annotate("{", "}", descriptor_);
+  printer->Annotate("{", "}", descriptor_, Semantic::kSet);
 
   WriteFieldAccessorDocComment(printer, descriptor_, CLEARER,
                                /* builder */ true);
@@ -296,7 +297,7 @@ void ImmutablePrimitiveFieldGenerator::GenerateBuilderMembers(
       variables_,
       "$deprecation$public Builder ${$clear$capitalized_name$$}$() {\n"
       "  $clear_has_field_bit_builder$\n");
-  printer->Annotate("{", "}", descriptor_);
+  printer->Annotate("{", "}", descriptor_, Semantic::kSet);
   JavaType type = GetJavaType(descriptor_);
   if (type == JAVATYPE_STRING || type == JAVATYPE_BYTES) {
     // The default value is not a simple literal so we want to avoid executing
@@ -579,7 +580,7 @@ void ImmutablePrimitiveOneofFieldGenerator::GenerateBuilderMembers(
                  "  $on_changed$\n"
                  "  return this;\n"
                  "}\n");
-  printer->Annotate("{", "}", descriptor_);
+  printer->Annotate("{", "}", descriptor_, Semantic::kSet);
 
   WriteFieldAccessorDocComment(printer, descriptor_, CLEARER,
                                /* builder */ true);
@@ -593,7 +594,7 @@ void ImmutablePrimitiveOneofFieldGenerator::GenerateBuilderMembers(
       "  }\n"
       "  return this;\n"
       "}\n");
-  printer->Annotate("{", "}", descriptor_);
+  printer->Annotate("{", "}", descriptor_, Semantic::kSet);
 }
 
 void ImmutablePrimitiveOneofFieldGenerator::GenerateBuilderClearCode(
@@ -796,7 +797,7 @@ void RepeatedImmutablePrimitiveFieldGenerator::GenerateBuilderMembers(
                  "  $on_changed$\n"
                  "  return this;\n"
                  "}\n");
-  printer->Annotate("{", "}", descriptor_);
+  printer->Annotate("{", "}", descriptor_, Semantic::kSet);
   WriteFieldAccessorDocComment(printer, descriptor_, LIST_MULTI_ADDER,
                                /* builder */ true);
   printer->Print(variables_,
@@ -819,7 +820,7 @@ void RepeatedImmutablePrimitiveFieldGenerator::GenerateBuilderMembers(
       "  $on_changed$\n"
       "  return this;\n"
       "}\n");
-  printer->Annotate("{", "}", descriptor_);
+  printer->Annotate("{", "}", descriptor_, Semantic::kSet);
 }
 
 void RepeatedImmutablePrimitiveFieldGenerator::GenerateKotlinDslMembers(

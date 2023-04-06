@@ -56,6 +56,7 @@ using internal::WireFormat;
 using internal::WireFormatLite;
 
 namespace {
+using Semantic = ::google::protobuf::io::AnnotationCollector::Semantic;
 
 void SetPrimitiveVariables(
     const FieldDescriptor* descriptor, int messageBitIndex, int builderBitIndex,
@@ -313,7 +314,7 @@ void ImmutableStringFieldLiteGenerator::GenerateBuilderMembers(
                  "  instance.set$capitalized_name$(value);\n"
                  "  return this;\n"
                  "}\n");
-  printer->Annotate("{", "}", descriptor_);
+  printer->Annotate("{", "}", descriptor_, Semantic::kSet);
   WriteFieldAccessorDocComment(printer, descriptor_, CLEARER,
                                /* builder */ true);
   printer->Print(

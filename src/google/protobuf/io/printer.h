@@ -628,8 +628,10 @@ class PROTOBUF_EXPORT Printer {
   // Link a substitution variable emitted by the last call to Print to the
   // object described by descriptor.
   template <typename SomeDescriptor>
-  void Annotate(absl::string_view varname, const SomeDescriptor* descriptor) {
-    Annotate(varname, varname, descriptor);
+  void Annotate(
+      absl::string_view varname, const SomeDescriptor* descriptor,
+      absl::optional<AnnotationCollector::Semantic> semantic = absl::nullopt) {
+    Annotate(varname, varname, descriptor, semantic);
   }
 
   // Link the output range defined by the substitution variables as emitted by
@@ -637,26 +639,32 @@ class PROTOBUF_EXPORT Printer {
   // begins at begin_varname's value and ends after the last character of the
   // value substituted for end_varname.
   template <typename Desc>
-  void Annotate(absl::string_view begin_varname, absl::string_view end_varname,
-                const Desc* descriptor);
+  void Annotate(
+      absl::string_view begin_varname, absl::string_view end_varname,
+      const Desc* descriptor,
+      absl::optional<AnnotationCollector::Semantic> semantic = absl::nullopt);
 
   // Link a substitution variable emitted by the last call to Print to the file
   // with path file_name.
-  void Annotate(absl::string_view varname, absl::string_view file_name) {
-    Annotate(varname, varname, file_name);
+  void Annotate(
+      absl::string_view varname, absl::string_view file_name,
+      absl::optional<AnnotationCollector::Semantic> semantic = absl::nullopt) {
+    Annotate(varname, varname, file_name, semantic);
   }
 
   // Link the output range defined by the substitution variables as emitted by
   // the last call to Print to the file with path file_name. The range begins
   // at begin_varname's value and ends after the last character of the value
   // substituted for end_varname.
-  void Annotate(absl::string_view begin_varname, absl::string_view end_varname,
-                absl::string_view file_name) {
+  void Annotate(
+      absl::string_view begin_varname, absl::string_view end_varname,
+      absl::string_view file_name,
+      absl::optional<AnnotationCollector::Semantic> semantic = absl::nullopt) {
     if (options_.annotation_collector == nullptr) {
       return;
     }
 
-    Annotate(begin_varname, end_varname, file_name, {});
+    Annotate(begin_varname, end_varname, file_name, semantic);
   }
 
   // Indent text by `options.spaces_per_indent`; undone by Outdent().
@@ -716,8 +724,10 @@ class PROTOBUF_EXPORT Printer {
   // last byte of `end_varname`'s value.
   //
   // `begin_varname` and `end_varname may` refer to the same variable.
-  void Annotate(absl::string_view begin_varname, absl::string_view end_varname,
-                absl::string_view file_path, const std::vector<int>& path);
+  void Annotate(
+      absl::string_view begin_varname, absl::string_view end_varname,
+      absl::string_view file_path, const std::vector<int>& path,
+      absl::optional<AnnotationCollector::Semantic> semantic = absl::nullopt);
 
   // The core printing implementation. There are three public entry points,
   // which enable different slices of functionality that are controlled by the
@@ -1072,14 +1082,16 @@ void Printer::Print(absl::string_view text, const Args&... args) {
 
 template <typename Desc>
 void Printer::Annotate(absl::string_view begin_varname,
-                       absl::string_view end_varname, const Desc* descriptor) {
+                       absl::string_view end_varname, const Desc* descriptor,
+                       absl::optional<AnnotationCollector::Semantic> semantic) {
   if (options_.annotation_collector == nullptr) {
     return;
   }
 
   std::vector<int> path;
   descriptor->GetLocationPath(&path);
-  Annotate(begin_varname, end_varname, descriptor->file()->name(), path);
+  Annotate(begin_varname, end_varname, descriptor->file()->name(), path,
+           semantic);
 }
 
 template <typename Map>

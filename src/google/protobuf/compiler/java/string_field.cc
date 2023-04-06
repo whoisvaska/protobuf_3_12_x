@@ -57,6 +57,7 @@ using internal::WireFormat;
 using internal::WireFormatLite;
 
 namespace {
+using Semantic = ::google::protobuf::io::AnnotationCollector::Semantic;
 
 void SetPrimitiveVariables(
     const FieldDescriptor* descriptor, int messageBitIndex, int builderBitIndex,
@@ -284,7 +285,7 @@ void ImmutableStringFieldGenerator::GenerateBuilderMembers(
         "$deprecation$public boolean ${$has$capitalized_name$$}$() {\n"
         "  return $get_has_field_bit_builder$;\n"
         "}\n");
-    printer->Annotate("{", "}", descriptor_);
+    printer->Annotate("{", "}", descriptor_, Semantic::kSet);
   }
 
   WriteFieldAccessorDocComment(printer, descriptor_, GETTER);
@@ -340,13 +341,13 @@ void ImmutableStringFieldGenerator::GenerateBuilderMembers(
                  "  $on_changed$\n"
                  "  return this;\n"
                  "}\n");
-  printer->Annotate("{", "}", descriptor_);
+  printer->Annotate("{", "}", descriptor_, Semantic::kSet);
   WriteFieldAccessorDocComment(printer, descriptor_, CLEARER,
                                /* builder */ true);
   printer->Print(
       variables_,
       "$deprecation$public Builder ${$clear$capitalized_name$$}$() {\n");
-  printer->Annotate("{", "}", descriptor_);
+  printer->Annotate("{", "}", descriptor_, Semantic::kSet);
   // The default value is not a simple literal so we want to avoid executing
   // it multiple times.  Instead, get the default out of the default instance.
   printer->Print(variables_,
@@ -655,7 +656,7 @@ void ImmutableStringOneofFieldGenerator::GenerateBuilderMembers(
                  "  $on_changed$\n"
                  "  return this;\n"
                  "}\n");
-  printer->Annotate("{", "}", descriptor_);
+  printer->Annotate("{", "}", descriptor_, Semantic::kSet);
   WriteFieldAccessorDocComment(printer, descriptor_, CLEARER,
                                /* builder */ true);
   printer->Print(
@@ -668,7 +669,7 @@ void ImmutableStringOneofFieldGenerator::GenerateBuilderMembers(
       "  }\n"
       "  return this;\n"
       "}\n");
-  printer->Annotate("{", "}", descriptor_);
+  printer->Annotate("{", "}", descriptor_, Semantic::kSet);
 
   WriteFieldStringBytesAccessorDocComment(printer, descriptor_, SETTER,
                                           /* builder */ true);
