@@ -339,6 +339,7 @@ void ImmutableMessageFieldGenerator::GenerateBuilderMembers(
                  "  $on_changed$\n"
                  "  return this;\n"
                  "}\n");
+  printer->Annotate("{", "}", descriptor_);
 
   // Field.Builder getFieldBuilder()
   WriteFieldDocComment(printer, descriptor_);
