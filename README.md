@@ -16,7 +16,6 @@ D:\Projects\protobuf_3_12_x> git branch
 Expected output:
 ```
 * 3.12.x
-  main
 ```
 
 3) Update submodules:
