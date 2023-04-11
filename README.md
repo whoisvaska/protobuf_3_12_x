@@ -70,9 +70,21 @@ D:\Projects\protobuf_3_12_x\cmake\build\solution> cmake -G "Visual Studio 17 202
 
 8) Open protobuf.sln using MSVS
 9) Right-click INSTALL, select Build
-10) *.lib files, source files will be placed in protobuf_3_12_x\install\
-
-
+10) *.lib files, source files will be placed in protobuf_3_12_x\install\:
+```
+D:\Projects\protobuf_3_12_x\cmake\build\solution> cd ../../../
+D:\Projects\protobuf_3_12_x> cd install
+D:\Projects\protobuf_3_12_x\install> dir
+```
+Expected output:
+```
+11.04.2023  18:07    <DIR>          .
+11.04.2023  18:07    <DIR>          ..
+11.04.2023  18:08    <DIR>          bin
+11.04.2023  18:08    <DIR>          cmake
+11.04.2023  18:07    <DIR>          include
+11.04.2023  18:08    <DIR>          lib
+```
 
 Protocol Buffers - Google's data interchange format
 ===================================================
