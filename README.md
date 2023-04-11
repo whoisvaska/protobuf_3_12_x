@@ -1,3 +1,79 @@
+# Build steps using MSVS 2022, cmake version 3.25.1-msvc1:
+
+1) Clone repository and open the folder:
+
+```
+D:\Projects> git clone https://github.com/whoisvaska/protobuf_3_12_x.git
+D:\Projects> cd protobuf_3_12_x
+```
+
+2) Change working branch to 3.12.x:
+
+```
+D:\Projects\protobuf_3_12_x> git checkout 3.12.x
+D:\Projects\protobuf_3_12_x> git branch
+```
+Expected output:
+```
+* 3.12.x
+  main
+```
+
+3) Update submodules:
+
+```
+D:\Projects\protobuf_3_12_x> git submodule update --init --recursive
+```
+
+4) Change working directory to cmake:
+
+```
+D:\Projects\protobuf_3_12_x> cd cmake
+```
+
+5) Create build directory:
+
+```
+D:\Projects\protobuf_3_12_x\cmake> mkdir build && cd build
+```
+
+6) Create solution directory:
+
+```
+D:\Projects\protobuf_3_12_x\cmake\build> mkdir solution & cd solution
+```
+
+7) Configure cmake using Visual Studio 17 2022 Generator:
+
+```
+D:\Projects\protobuf_3_12_x\cmake\build\solution> cmake -G "Visual Studio 17 2022" ^
+ -DCMAKE_CXX_STANDARD=14 ^
+ -DCMAKE_INSTALL_PREFIX=../../../install ^
+ ../..
+ ```
+ Expected output:
+ ```
+ -- 3.12.4.0
+-- Performing Test CMAKE_HAVE_LIBC_PTHREAD
+-- Performing Test CMAKE_HAVE_LIBC_PTHREAD - Failed
+-- Looking for pthread_create in pthreads
+-- Looking for pthread_create in pthreads - not found
+-- Looking for pthread_create in pthread
+-- Looking for pthread_create in pthread - not found
+-- Found Threads: TRUE
+-- Could NOT find ZLIB (missing: ZLIB_LIBRARY ZLIB_INCLUDE_DIR)
+-- Configuring done
+-- Generating done
+-- Build files have been written to: D:/Projects/protobuf_3_12_x/cmake/build/solution
+```
+ 
+
+8) Open protobuf.sln using MSVS
+9) Right-click INSTALL, select Build
+10) *.lib files, source files will be placed in protobuf_3_12_x\install\
+
+
+
 Protocol Buffers - Google's data interchange format
 ===================================================
 
